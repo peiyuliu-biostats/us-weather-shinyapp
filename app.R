@@ -36,7 +36,7 @@ ui <- dashboardPage(
       
       menuItem("Dashboard", tabName = "analysis", icon = icon("globe")),
       menuItem("Github", icon = icon("github"), 
-               href = "https://github.com/peiyuliu-biostats/anpp-trial-comparison", newtab = TRUE),
+               href = "https://github.com/peiyuliu-biostats/us-weather-shinyapp", newtab = TRUE),
       menuItem("Model Description", tabName = "model_desc", icon = icon("circle-info")),
       menuItem("shinyapps.io", icon = icon("cloud"), 
                href = "https://peiyuliu.shinyapps.io/us-weather-analysis/", newtab = TRUE),
