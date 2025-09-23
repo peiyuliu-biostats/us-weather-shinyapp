@@ -2,7 +2,7 @@
 
 An interactive **Shiny** dashboard to explore, analyze, and forecast historical weather data across the United States.
 
-[![View the Live Application](https://img.shields.io/badge/View%20the%20Live%20Application-blue?style=for-the-badge&logo=shiny)](https://peiyuliu.shinyapps.io/us-weather-analysis/)
+➡️ [**View the Live Application Here**](https://peiyuliu.shinyapps.io/us-weather-analysis/)
 
 > **Note:** Because this app runs on a free server, switching years can briefly disconnect the session. Therefore, **2023 is used as the primary example year**. Analyses for other years follow **exactly the same methods**.  
 > **Model simplification:** To make the app lighter on Shiny, the original LSTM forecasting model was **replaced with XGBoost** for training and visualization.
