@@ -1,0 +1,22 @@
+# History files
+.Rhistory
+.Rapp.history
+
+# Session Data
+.RData
+
+# User-specific files
+.Rproj.user/
+
+# R Shiny Connect folder
+rsconnect/
+
+# Package files
+*.Rproj
+*.tar.gz
+*.zip
+
+# R Markdown files
+*.utf8.md
+*.knit.md
+
