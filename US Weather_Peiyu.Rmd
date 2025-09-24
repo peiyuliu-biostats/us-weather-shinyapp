@@ -1,0 +1,609 @@
+---
+title: "Individual project_Peiyu"
+author: "Peiyu Liu"
+output:
+  html_document:
+    df_print: paged
+date: "2024-04-28"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r,warning=FALSE,message=FALSE}
+
+#install.packages("GSODR")
+#library(GSODR)
+#data<-get_GSOD(years = 2023, country = "US")
+
+```
+
+```{r,warning=FALSE,message=FALSE}
+
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(climatol)
+library(corrplot)
+library(GGally)
+library(remap)
+library(leaflet)
+library(viridis)
+library(cluster)
+library(fpc)
+library(gridExtra)
+library(readxl)
+library(stringr)
+library(zoo)
+library(RColorBrewer)
+library(forecast)
+library(ggfortify)
+library(tseries)
+library(lubridate)
+library(purrr)
+library(maps)
+library(keras)
+library(reshape2)
+
+weather <- read.csv("data.csv")
+USweather <- data.frame(weather)
+```
+
+
+```{r,warning=FALSE,message=FALSE}
+
+USweather_month <- USweather %>%
+  dplyr::group_by(MONTH)  %>% 
+  summarise(MeanTemperature = mean(TEMP),  #average temperature
+            MeanRelative_humidity = mean(RH,na.rm = T),  #average relative humidity
+            MeanRainfall = mean(PRCP,na.rm = T),  #average daily rainfall
+            MeanWind_strong = mean(WDSP,na.rm = T)) #average wind force
+```
+
+
+# Visualization of weather data
+
+## Line Plots
+
+```{r,warning=FALSE,message=FALSE}
+
+US_month <- data.frame(month = rep(1:12,4),
+                           values = as.vector(as.matrix(USweather_month[,2:5])),
+                           group = rep(c("Mean Temperature(℃)","Mean Relative Humidity","Mean Rainfall(mm)","Mean WInd Speeed(m/s)"),
+                                       each = dim(USweather_month)[1]))
+
+ggplot(US_month) +theme_classic() +
+  geom_line(aes(month,values),colour = "red") +
+  facet_wrap(~group,scales = "free") + 
+  scale_x_continuous(breaks = seq(1,12,4),labels = paste(seq(1,12,4),"",sep = "")) + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(y=" ",title ="Weather in the United States in 2023") +
+  xlab("Month")
+
+#ggsave("C:/Users/24772/Desktop/US Weather/Fig1.jpg",dpi=1200)
+```
+
+## Correaltion 
+
+```{r,warning=FALSE,message=FALSE}
+
+weacor <- cor(USweather_month[,2:5])
+rownames(weacor) <- c("Temperature", "Relative Humidity", "Rainfall", "Wind Speed")
+colnames(weacor) <- c("Temperature", "Relative Humidity", "Rainfall", "Wind Speed") 
+
+# Convert the correlation matrix to a tidy format
+weacor.tidy <- melt(weacor)
+
+# Create the correlation plot using ggplot2
+ggplot(weacor.tidy, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(value, 2)), size = 4, color = "black") +
+  scale_fill_gradientn(colors = c("blue", "white", "red"), limits = c(-1, 1),
+                        breaks = seq(-1, 1, by = 0.2))+
+  labs(title = "Weather Correlation Coefficient", x = "", y = "",fill="Coefficient") +
+  theme_minimal()
+
+#ggsave("C:/Users/24772/Desktop/US Weather/Fig2.jpg",dpi=1200)
+
+```
+
+
+
+## Scatter Plot
+
+```{r,warning=FALSE,message=FALSE}
+
+smdata <- data.frame((USweather_month[,2:5]))
+names(smdata) <- c("Temperature", "Relative Humidity", "Rainfall", "Wind Speed")
+ggscatmat(smdata) + theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(x = "",y = "",title = "Weather Data")
+
+#ggsave("C:/Users/24772/Desktop/US Weather/Fig3.jpg",dpi=1200)
+```
+
+## Visualize weather data on maps
+
+```{r,warning=FALSE,message=FALSE}
+
+## Extract one day's data
+newcitys_day <- USweather[USweather$YEARMODA == "2023-12-31",]
+
+## Define color
+tempcolor <- colorNumeric(palette = viridis(6, option = "plasma"), domain = na.omit(newcitys_day$TEMP))
+rehucolor <- colorNumeric(palette = viridis(6, option = "plasma"), domain = na.omit(newcitys_day$RH))
+raincolor <- colorNumeric(palette = viridis(6, option = "viridis"), domain = na.omit(newcitys_day$PRCP))
+windcolor <- colorNumeric(palette = viridis(6, option = "viridis"), domain = na.omit(newcitys_day$WDSP))
+
+map <- leaflet(data = newcitys_day) %>%
+  setView(lng = -95, lat = 37, zoom = 4) %>% # Set view center to United States
+  addProviderTiles(providers$CartoDB.Positron) %>% # Use the map style provided by CartoDB.Positron
+  addCircleMarkers(lng = ~LONGITUDE, lat = ~LATITUDE,
+                   stroke = FALSE, group = "Temperature",
+                   fillOpacity = 0.8, radius = ~ (8 + TEMP/4),
+                   popup = ~paste(STATE, round(TEMP, 2), sep = "-Temperature:"),
+                   color = ~tempcolor(TEMP)) %>%
+  addCircleMarkers(lng = ~LONGITUDE, lat = ~LATITUDE,
+                   stroke = FALSE, group = "Relative Humidity",
+                   fillOpacity = 0.8, radius = ~ (2 + RH/10),
+                   popup = ~paste(STATE, round(RH, 2), sep = "-Relative Humidity:"),
+                   color = ~rehucolor(RH)) %>%
+  addCircleMarkers(lng = ~LONGITUDE, lat = ~LATITUDE,
+                   stroke = FALSE, group = "Rainfall",
+                   fillOpacity = 0.8, radius = ~ (4.5 + PRCP),
+                   popup = ~paste(STATE, round(PRCP, 2), sep = "-Rainfall:"),
+                   color = ~raincolor(PRCP)) %>%
+  addCircleMarkers(lng = ~LONGITUDE, lat = ~LATITUDE,
+                   stroke = FALSE, group = "Wind Speed",
+                   fillOpacity = 0.8, radius = ~ (2 + WDSP),
+                   popup = ~paste(STATE, round(WDSP, 2), sep = "-Wind Speed:"),
+                   color = ~windcolor(WDSP)) %>%
+  addLayersControl(baseGroups = c("Temperature", "Relative Humidity", "Rainfall", "Wind Speed"),
+                   options = layersControlOptions(collapsed = FALSE))%>%
+  addLegend("topleft",pal = tempcolor, values = ~na.omit(TEMP),
+            title = "Temperature",opacity = 0.5) %>%
+  addLegend("topleft",pal = rehucolor, values = ~na.omit(RH),
+            title = "Relative Humidity",opacity = 0.5) %>%
+  addLayersControl(baseGroups = c("Temperature", "Relative Humidity", "Rainfall", "Wind Speed"),
+                   options = layersControlOptions(collapsed = FALSE))%>%
+  addLegend("topright",pal = raincolor, values = ~na.omit(PRCP),
+            title = "Rainfall(mm)",opacity = 0.5) %>%
+  addLegend("topright",pal = windcolor, values = ~na.omit(WDSP),
+            title = "Wind Speed(m/s)",opacity = 0.5) 
+
+map
+#library(htmlwidgets)
+#saveWidget(map, file="C:/Users/24772/Desktop/US Weather/map1.html", selfcontained = TRUE)
+
+```
+
+
+
+# Cluster Analysis
+
+```{r,warning=FALSE,message=FALSE}
+
+States <- USweather %>%
+  group_by(STATE,MONTH)  %>%
+  summarise(MeanTemperature = mean(TEMP),  #average temperature
+            MeanRelative_humidity = mean(RH,na.rm = T),  #average relative humidity
+            MeanRainfall = mean(PRCP,na.rm = T),  #average daily rainfall
+            MeanWind_strong = mean(WDSP,na.rm = T)) #average wind force
+unique(States$STATE)
+length(unique(States$STATE))
+
+```
+
+
+```{r,warning=FALSE,message=FALSE}
+## There are 54 locations in total
+## Prepare the characteristics of the data.
+States_weather <- States %>%
+  group_by(STATE) %>%
+  summarise(MeanTemperature2 = mean(MeanTemperature,na.rm = T),  #average temperature
+            MinTemperature = min(MeanTemperature,na.rm = T),  #lowest temperature
+            MaxTemperature = max(MeanTemperature,na.rm = T),  #lowest temperature
+            SdTemperature = sd(MeanTemperature,na.rm = T),  #temperature standard deviation
+            MeanRelative_humidity2 = mean(MeanRelative_humidity,na.rm = T),#average relative humidity
+            MinRelative_humidity = min(MeanRelative_humidity,na.rm = T),#minimum relative humidity
+            MaxRelative_humidity = max(MeanRelative_humidity,na.rm = T),  #maximum relative humidity
+            SdRelative_humidity = sd(MeanRelative_humidity,na.rm = T),  #relative humidity standard deviation
+            MeanRainfall2 = mean(MeanRainfall,na.rm = T),  #average daily rainfall
+            MaxRainfall = max(MeanRainfall,na.rm = T),  
+#Maximum daily rainfall; because all minimum rainfalls are 0, they are eliminated
+            SdRainfall = sd(MeanRainfall,na.rm = T),  #Daily rainfall standard deviation
+            MeanWind_strong2 = mean(MeanWind_strong,na.rm = T), 
+            MinWind_strong = min(MeanWind_strong,na.rm = T), 
+            MaxWind_strong = max(MeanWind_strong,na.rm = T), 
+            SdWind_strong = sd(MeanWind_strong,na.rm = T) 
+  )
+
+states_weather_clean <- States_weather[!States_weather$STATE=="DC"|is.na(States_weather$STATE),]
+```
+
+
+```{r,warning=FALSE,message=FALSE}
+
+## Standardize feature data
+states_cluster <- apply(states_weather_clean[,2:16],2,scale)
+## ==============================================================
+## ===============k-means clustering algorithm======================================
+## ==============================================================
+## Clustering using k-means clustering algorithm
+## Explore the changes caused by the number of clusters k
+## Calculate the sum of squares of residuals for clustering
+set.seed(1234)
+
+## Calculate the sum of squares within a group and the sum of squares between groups
+tot_withinss <- vector()
+betweenss <- vector()
+kk = 20
+for(ii in 1:kk){
+  k1 <- kmeans(states_cluster,ii,iter.max = 100,algorithm = "MacQueen")
+  tot_withinss[ii] <- k1$tot.withinss
+  betweenss[ii] <- k1$betweenss
+}
+
+kmeanvalue <- data.frame(kk = 1:kk,
+                         tot_withinss = tot_withinss,
+                         betweenss = betweenss)
+
+
+p1 <- ggplot(kmeanvalue,aes(x = kk,y = tot_withinss))+
+  theme_bw(base_family = "STKaiti") +
+  geom_point(colour = "red") +
+  geom_line() +
+  labs(x = "Number of kmean Clusters",y = " ") +
+  ggtitle("Sum of squares within clusters")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+
+p2 <- ggplot(kmeanvalue,aes(x = kk,y = betweenss))+
+  theme_bw(base_family = "STKaiti") +
+  geom_point(colour = "red") +
+  geom_line() +
+  labs(x = "Number of kmean Clusters",y = " ") +
+  ggtitle("Sum of squares between clusters")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+combined_plot <- grid.arrange(p1, p2, nrow = 2)
+
+# Save the combined plot
+# ggsave("C:/Users/24772/Desktop/US Weather/Fig4.jpg", combined_plot, dpi = 1200)
+```
+
+From the k-means clustering diagram above, we can see that we can set the number of clusters as 5 categories, because before 5, these two indicators change more dramatically, and after that, the changes are more gentle, so we set them as 5 categories.
+
+
+```{r,warning=FALSE,message=FALSE}
+
+k = 5  ## number of clusters
+kcluster <- kmeans(states_cluster,k,iter.max = 100,algorithm = "MacQueen")
+## Output our clustering results
+kcluster
+## See how many locations there are in each category
+table(kcluster$cluster)
+## Visualization of clustering results. This graph does not need to be analyzed because there #are too many clusters.
+
+# Open a JPEG device
+#jpeg("C:/Users/24772/Desktop/US Weather/Fig5.jpg",width = 8400, height = 6400, units = "px", res = 1200)
+
+# Create the clusplot
+clusplot(states_cluster, kcluster$cluster, main = paste("kmean cluster number=", k, sep = ""))
+
+# Close the device to save the file
+dev.off()
+```
+
+```{r,warning=FALSE,message=FALSE,fig.height=8}
+
+## Represents the clustering effect and the contour information in clustering
+si1 <- silhouette(kcluster$cluster,dist(states_cluster,method = "euclidean"))
+
+
+# Open a JPEG device
+#jpeg("C:/Users/24772/Desktop/US Weather/Fig6.jpg",width = 8400, height = 6400, units = "px", res = 1200)
+
+par(cex = 0.9)
+plot(si1,main = "kmean silhouette",col = "red")
+
+# Close the device to save the file
+#dev.off()
+```
+
+From the contour information graph in the clustering, we can see that our clustering effect is still very good. The closer the histogram bars in each category are to 1, the better these clusters are in the same family.
+
+```{r,warning=FALSE,message=FALSE,fig.height=8}
+
+## Check which cities are classified into which categories
+states_clu <- data.frame(state= states_weather_clean$STATE,
+                       cluster = c(kcluster$cluster))
+
+state_geo<- map_data("state")
+state_bounds <- data.frame(state = unique(state_geo$region),
+                           long = sapply(unique(state_geo$region), function(x) mean(state_geo$lon[state_geo$region == x])),
+                           lat = sapply(unique(state_geo$region), function(x) mean(state_geo$lat[state_geo$region == x])))
+state_bounds$state<-state.abb[match(state_bounds$state, tolower(state.name))]
+state_bounds$state[is.na(state_bounds$state)]<-"DC"
+
+state_typeinfo<-merge(states_clu, state_bounds, by="state", all.x=TRUE)%>%
+  na.omit()
+  
+```
+
+```{r,warning=FALSE,message=FALSE,fig.height=8}
+
+clucolor <- colorFactor(viridis(k,option = "viridis"),state_typeinfo$cluster)
+## Draw the map--------------------------------
+map_2 <- leaflet(data = state_typeinfo,width = 800, height = 600) %>%
+  setView(lng = -95, lat = 37, zoom = 4) %>% # Set view center to United States
+  addProviderTiles(providers$CartoDB.Positron) %>% # Use the map style provided by CartoDB.Positron
+  addCircleMarkers(lng = state_typeinfo$long, lat = state_typeinfo$lat,
+                   stroke = FALSE,group = "Cluster",
+                   fillOpacity = 0.8,radius = 8.5,
+                   popup = ~paste(state_typeinfo$state,state_typeinfo$cluster,sep = "-cluster is:"),
+                   color = ~clucolor(state_typeinfo$cluster)) %>%
+  addLegend("topleft",pal = clucolor, values = state_typeinfo$cluster,
+            title ="Cluster",opacity = 0.5) %>%
+  addLayersControl(baseGroups = c("K means Clustering Result"),
+                   options = layersControlOptions(collapsed = FALSE),
+                   position = "topright")
+
+#saveWidget(map_2, file="C:/Users/24772/Desktop/US Weather/map2.html", selfcontained = TRUE)
+map_2
+```
+
+
+# Time Series Analysis
+
+```{r,warning=FALSE,message=FALSE}
+
+Sys.setlocale("LC_TIME","English")
+FL <- USweather[USweather$STATE=="FL",]%>%
+  select(YEARMODA,TEMP,MONTH,NAME)
+
+mymonths <- c("January","February","March","April","May","June","July",
+              "August","September","October","November","December")
+
+## Layer
+month.name <- sort(unique(FL$MONTH))
+FL$month2 <- factor(FL$MONTH, levels = month.name,labels = mymonths)
+FL$YEARMODA<-as.Date(FL$YEARMODA)
+FL$weekday = weekdays(FL$YEARMODA, abbreviate = FALSE)
+
+FL<-na.omit(FL)
+
+FL_sum<-FL%>%
+  group_by(month2)%>%
+  summarise(MeanTemp=mean(TEMP))
+
+FL_sum1<-FL%>%
+  group_by(month2,NAME)%>%
+  summarise(MeanTemp=mean(TEMP))
+
+FL_sum2<-FL%>%
+  group_by(month2,weekday)%>%
+  summarise(MeanTemp=mean(TEMP))
+```
+
+```{r,warning=FALSE,message=FALSE}
+
+## Heatmap of temperature
+ggplot(data=FL_sum2, aes(x=month2,y=weekday)) + 
+  theme_bw(base_family = "STKaiti") +
+  geom_tile(aes(fill = MeanTemp),colour = "white") + 
+  geom_text(aes(label = round(MeanTemp,1))) +
+  scale_fill_gradientn(colours=rev(brewer.pal(10,'Spectral'))) + 
+  theme(legend.title=element_blank(),
+        axis.title.y=element_blank(),
+        axis.title.x=element_blank(),
+        legend.position="top") + 
+  ggtitle("Temperature Variations in Florida by Month and Weekday in 2023") +
+  labs(x="Month",y = "Weekday") +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle=45, hjust=1))
+
+#ggsave("C:/Users/24772/Desktop/US Weather/Fig7.jpg", dpi = 1200)
+```
+
+```{r,warning=FALSE,message=FALSE}
+
+## Scatter plot box plot
+ggplot(data =FL_sum1,aes(x=month2,y=MeanTemp,color=MeanTemp)) +
+  theme_bw(base_family = "STKaiti") +
+  scale_color_gradientn(colours=rev(brewer.pal(10,'Spectral'))) + 
+  geom_boxplot(colour='black',size=.4,alpha=.5) + 
+  geom_jitter(shape=10,width=.2,size=1) + 
+  theme(legend.title=element_blank(),
+        legend.position='top',
+        axis.text.x = element_text(angle=45, hjust=1),
+        plot.title = element_text(hjust = 0.5)) + 
+  scale_y_continuous(breaks = seq(-10,30,5),labels = seq(-10,30,5)) +
+  ggtitle("Monthly Average Temperature at Different Stations of Florida in 2023") + 
+  xlab('') + ylab('Temperature(℃)') 
+
+#ggsave("C:/Users/24772/Desktop/US Weather/Fig8.jpg", dpi = 1200)
+```
+
+```{r,warning=FALSE,message=FALSE}
+
+FL_sum3<-FL%>%
+  group_by(YEARMODA)%>%
+  summarise(MeanTemp=mean(TEMP))
+
+
+Sys.setlocale("LC_TIME","English")
+library(scales)
+datebreaks <- seq(as.Date("2023-01-01"), as.Date("2023-12-31"),
+                  by = "2 month")
+## average temperature graph
+ggplot(data =FL_sum3,aes(x=YEARMODA,y=MeanTemp)) +
+  theme_bw(base_family = "STKaiti") +
+  geom_line()  + 
+  xlab('Date') + ylab('Temperature(℃)') +
+  ggtitle("Daily Temperature Changes in Florida in 2023") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_x_date(breaks = datebreaks,
+               labels = date_format("%Y %b")) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+
+#ggsave("C:/Users/24772/Desktop/US Weather/Fig9.jpg", dpi = 1200)
+```
+
+
+```{r,warning=FALSE,message=FALSE}
+
+max_value <- max(FL_sum3$MeanTemp)
+min_value <- min(FL_sum3$MeanTemp)
+spread <- max_value - min_value
+ 
+dataset <- (FL_sum3$MeanTemp - min_value) / spread
+ 
+create_dataset <- function(dataset,
+                           look_back = 1)
+{
+    l <- length(dataset)
+    dataX <- array(dim = c(l - look_back, look_back))
+ 
+    for (i in 1:ncol(dataX))
+    {
+        dataX[, i] <- dataset[i:(l - look_back + i - 1)]
+    }
+ 
+    dataY <- array(
+        data = dataset[(look_back + 1):l],
+        dim = c(l - look_back, 1))
+ 
+    return(
+        list(
+            dataX = dataX,
+            dataY = dataY))
+}
+
+#Divide training set and test set
+train_size <- as.integer(length(dataset) * 0.67)
+test_size <- length(dataset) - train_size
+ 
+train <- dataset[1:train_size]
+test <- dataset[(train_size + 1):length(dataset)]
+```
+
+In order to preprocess the data for training the neural network, two matrices are constructed from the data, namely "historical data" (as predictors) and "future data" (as prediction targets). Use historical data from the past month to make predictions. Compared with general regression problems, LSTM requires the input data to provide an additional dimension - time step
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE,echo=FALSE}
+
+look_back <- 1
+trainXY <- create_dataset(train, look_back)
+testXY <-  create_dataset(test, look_back)
+ 
+dim_train <- dim(trainXY$dataX)
+dim_test <- dim(testXY$dataX)
+ 
+# reshape input to be [samples, time steps, features]
+dim(trainXY$dataX) <- c(dim_train[1], 1, dim_train[2])
+dim(testXY$dataX) <- c(dim_test[1], 1, dim_test[2])
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE,echo=FALSE}
+
+model <- keras_model_sequential()
+ 
+model %>%
+    layer_lstm(
+        units = 4,
+        input_shape = c(1, look_back)) %>%
+    layer_dense(
+        units = 1) %>%
+    compile(
+        loss = 'mean_squared_error',
+        optimizer = 'adam') %>%
+    fit(trainXY$dataX,
+        trainXY$dataY,
+        epochs = 100,
+        batch_size = 1,
+        verbose = 2)
+
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE,echo=FALSE}
+
+trainScore <- model %>%
+    evaluate(
+        trainXY$dataX,
+        trainXY$dataY,
+        verbose = 2)
+ 
+testScore <- model %>%
+    evaluate(
+        testXY$dataX,
+        testXY$dataY,
+        verbose = 2)
+ 
+sprintf(
+    'Train Score: %.4f MSE (%.4f RMSE)',
+    trainScore * spread^2,
+    sqrt(trainScore) * spread)
+ 
+sprintf(
+    'Test Score: %.4f MSE (%.4f RMSE)',
+    testScore * spread^2,
+    sqrt(testScore) * spread)
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE,echo=FALSE}
+
+library(ggplot2)
+library(ggthemes)
+trainPredict <- model %>%
+    predict(
+        trainXY$dataX,
+        verbose = 2)
+testPredict <- model %>%
+    predict(
+        testXY$dataX,
+        verbose = 2)
+ 
+trainPredict <- trainPredict * spread + min_value
+testPredict <- testPredict * spread + min_value
+ 
+df <- data.frame(
+    index = 1:length(dataset),
+    value = dataset * spread + min_value,
+    type = 'raw') %>%
+    rbind(
+        data.frame(
+            index = 1:length(trainPredict) + look_back,
+            value = trainPredict,
+            type = 'train')) %>%
+    rbind(
+        data.frame(
+            index = 1:length(testPredict) + look_back + length(train),
+            value = testPredict,
+            type = 'test'))
+ 
+ggplot(data = df) +
+    geom_line(
+        mapping = aes(
+            x = index,
+            y = value,
+            color = type)) +
+    geom_point(
+        mapping = aes(
+            x = index,
+            y = value,
+            color = type)) +
+    geom_vline(
+        xintercept = length(train) + 0.5) +
+    theme_classic()+
+    scale_color_economist()
+
+#ggsave("C:/Users/24772/Desktop/US Weather/Fig10.jpg", dpi = 1200)
+```
+
+
+

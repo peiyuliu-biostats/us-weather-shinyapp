@@ -245,9 +245,9 @@ ui <- dashboardPage(
                   # 4) Full Analysis Report
                   # -------------------------
                   h2("4. Full Analysis Report"),
-                  p("For a comprehensive, non-interactive report containing all visualizations and code from the initial exploratory data analysis of 2023, please see the following file. This report was generated from the R Markdown script that formed the basis of this application."),
+                  p("For a copy of the report, including all code from the initial exploratory data analysis, you can download the R Markdown file directly. This is the script that formed the basis of this application."),
                   tags$ul(
-                    tags$li(tags$a(strong("US Weather Analysis Full Report"), href="US-Weather.html", target="_blank", rel="noopener noreferrer"))
+                    tags$li(downloadLink("downloadRmd", strong("Download Full Analysis Report (.Rmd)")))
                   )
                 )
               )
@@ -1000,6 +1000,19 @@ server <- function(input, output, session) {
       ) +
       theme(plot.title = element_text(hjust = 0.5))
   })
+  
+  # downloading the R Markdown file
+  output$downloadRmd <- downloadHandler(
+    filename = function() {
+      # the filename the user will see when the download prompt appears.
+      "US-Weather-Analysis-Report.Rmd"
+    },
+    content = function(file) {
+      file.copy("US Weather_Peiyu.Rmd", file)
+    },
+    # MIME type to ensure the browser treats it as a download.
+    contentType = "text/plain"
+  )
 }
 
 shinyApp(ui, server)
