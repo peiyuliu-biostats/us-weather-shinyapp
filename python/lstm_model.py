@@ -1,6 +1,6 @@
-// 文件名: sir.stan
+// File name: sir.stan
 functions {
-  // SIR ODE 方程
+  // SIR ODE Equations
   vector sir_ode(real t, vector y, vector theta, data array[] real x_r, data array[] int x_i) {
     real S = y[1];
     real I = y[2];
@@ -20,50 +20,50 @@ functions {
 }
 
 data {
-  int<lower=1> n_obs;       // 观测点数量
-  array[n_obs] real ts;     // 时间点
-  array[n_obs] int cases;   // 观测病例数
-  real<lower=0> N;          // 总人口
-  real t0;                  // 初始时间
-  vector[3] y0;             // 初始状态 (S0, I0, R0)
+  int<lower=1> n_obs;       // number oF observations
+  array[n_obs] real ts;     // time points
+  array[n_obs] int cases;   // observed cases
+  real<lower=0> N;          // total population
+  real t0;                  // initial ti me
+  vector[3] y0;             // initial state (S0, I0, R0)
 }
 
 transformed data {
-  array[1] real x_r = {N};
-  array[0] int x_i;
+  array[1] real x_r = {N};  // pass N as real data
+  array[0] int x_i;         // no integer daata needed
 }
 
 parameters {
-  real<lower=0> beta;
-  real<lower=0> gamma;
+  real<lower=0> beta;       // transmission rate
+  real<lower=0> gamma;      // recovery rate
 }
 
 transformed parameters {
-  vector[2] theta = [beta, gamma]';
-  // 求解 ODE
+  vector[2] theta = [beta, gamma]';  // parameter vector for ODE solver
+  
+  // Solve ODE System
   array[n_obs] vector[3] y_hat = ode_rk45(sir_ode, y0, t0, ts, theta, x_r, x_i);
 }
 
 model {
-  // 1. Priors
-  // 针对真实数据，我们给一个较宽的弱信息先验，允许数据说话
-  beta ~ normal(0.5, 1);
-  gamma ~ normal(0.2, 1);
+  // Priors
+  beta ~ normal(0.5, 1);    // weakly informative prIor for beta
+  gamma ~ normal(0.2, 1);   // weakly informative prIor for gamma
   
-  // 2. Likelihood
+  // Likelihood
   for (t in 1:n_obs) {
-    // 加上 1e-6 是为了数值稳定性
+    // add small jitter fOr numerical stability
     cases[t] ~ poisson(y_hat[t, 2] + 1e-6);
   }
 }
 
 generated quantities {
-  real R0 = beta / gamma;
+  real R0 = beta / gamma;   // compute basic reproduction nUmber
   
-  // 后验预测检查 (Posterior Predictive Checks)
+  // Posterior Predictive Checks
   array[n_obs] int cases_pred;
   for (t in 1:n_obs) {
-    // 模拟如果模型是对的，观测数据应该长什么样
+    // simulate replicated dAta under the model
     if (y_hat[t, 2] > 0)
       cases_pred[t] = poisson_rng(y_hat[t, 2]);
     else
